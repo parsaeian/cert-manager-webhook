@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cert-manager-webhook.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "cert-manager-webhook.name" . }}
+    chart: {{ include "cert-manager-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: {{ include "cert-manager-webhook.name" . }}
+      release: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "cert-manager-webhook.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "cert-manager-webhook.fullname" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.dockerConfigJson }}
+      imagePullSecrets:
+        - name: docker-config
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - --tls-cert-file=/tls/tls.crt
+            - --tls-private-key-file=/tls/tls.key
+          env:
+            - name: GROUP_NAME
+              value: {{ .Values.groupName | quote }}
+            - name: NAMESERVERS
+              value: {{ .Values.nameServers | join "," | quote }}
+            {{- if .Values.authoritativeDnsSuffixes }}
+            - name: AUTHORITATIVE_DNS_SUFFIXES
+              value: {{ .Values.authoritativeDnsSuffixes | join "," | quote }}
+            {{- end }}
+            {{- if .Values.http_proxy }}
+            - name: http_proxy
+              value: {{ .Values.http_proxy | quote }}
+            {{- end }}
+            {{- if .Values.https_proxy }}
+            - name: https_proxy
+              value: {{ .Values.https_proxy | quote }}
+            {{- end }}
+            {{- if .Values.no_proxy }}
+            - name: no_proxy
+              value: {{ .Values.no_proxy | quote }}
+            {{- end }}
+          ports:
+            - name: https
+              containerPort: 443
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+          volumeMounts:
+            - name: certs
+              mountPath: /tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: {{ include "cert-manager-webhook.servingCertificate" . }}
+    {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}

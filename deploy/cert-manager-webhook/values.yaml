@@ -1,0 +1,92 @@
+# The GroupName here is used to identify your company or business unit that
+# created this webhook.
+# For example, this may be "acme.mycompany.com".
+# This name will need to be referenced in each Issuer's `webhook` stanza to
+# inform cert-manager of where to send ChallengePayload resources in order to
+# solve the DNS01 challenge.
+# This group name should be **unique**, hence using your own company's domain
+# here is recommended.
+groupName: acme.sotoon.ir
+
+certManager:
+  namespace: cert-manager
+  serviceAccountName: cert-manager
+
+replicaCount: 1
+dockerConfigJson: ""
+image:
+  # Public image. Inside Sotoon's network you can use
+  # registry.platform.sotoon.ir/delivery/cert-manager-webhook instead.
+  repository: ghcr.io/sotoon/cert-manager-webhook
+  # Empty = the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+nameOverride: cert-manager-webhook
+fullnameOverride: ""
+
+nameServers:
+  - 217.218.155.155
+  - 2.189.44.44
+  - 185.161.112.33
+  - 193.29.17.18
+
+# Optional override for the DNS suffixes considered internal to the platform.
+# When set (non-empty), replaces the compiled-in default list used by the
+# external acme-dns delegation guard. Leave empty for platform defaults.
+# Entries are domains, with or without the trailing dot, e.g.:
+#   authoritativeDnsSuffixes:
+#     - ns.customer.example
+authoritativeDnsSuffixes: []
+
+# Optional proxy settings injected as container environment variables.
+http_proxy: ""
+https_proxy: ""
+no_proxy: ""
+
+service:
+  type: ClusterIP
+  port: 443
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Set this true if you need ClusterIssuers to read secrets from other namespaces.
+createSecretReaderClusterRole: false
+inCluster: false
+
+# Pod and container security context. The defaults satisfy the Pod Security
+# Standard "restricted": the webhook runs as a non-root user, and the
+# namespaced sysctl below lets it bind port 443 without root (it only
+# affects the pod's own network namespace). Set both to null to get the
+# previous behaviour (no security context, image default user).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+  sysctls:
+    - name: net.ipv4.ip_unprivileged_port_start
+      value: "0"
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

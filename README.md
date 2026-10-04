@@ -30,33 +30,35 @@ reachable from Sotoon's internal network.
 
 ### Pod Security
 
-The chart does not set a `securityContext`, and the image runs as root and
-listens on port 443. In a namespace that enforces the Pod Security Standard
-`restricted`, the webhook pod is rejected; it runs under `baseline`. To run
-it under `restricted` today, the pod needs (for example via a post-renderer
-or a patched copy of the chart):
+The chart (source in [`deploy/cert-manager-webhook`](./deploy/cert-manager-webhook),
+version `v1.3.22`) sets a security context that satisfies the Pod Security
+Standard `restricted`, so the webhook runs in the same namespace as
+cert-manager even when that namespace enforces `restricted`:
 
-```yaml
-spec:
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 65532
-    runAsGroup: 65532
-    seccompProfile:
-      type: RuntimeDefault
-    sysctls:
-      - name: net.ipv4.ip_unprivileged_port_start   # bind 443 without root
-        value: "0"
-  containers:
-    - name: helm
-      securityContext:
-        allowPrivilegeEscalation: false
-        readOnlyRootFilesystem: true
-        capabilities:
-          drop: ["ALL"]
+| Value | Default |
+| --- | --- |
+| `podSecurityContext` | `runAsNonRoot: true`, `runAsUser/runAsGroup: 65532`, `seccompProfile: RuntimeDefault`, sysctl `net.ipv4.ip_unprivileged_port_start=0` (binds 443 without root; affects only the pod's own network namespace) |
+| `securityContext` | `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `capabilities.drop: [ALL]` |
+
+An `emptyDir` is mounted at `/tmp` so the read-only root filesystem is safe.
+To get the previous behaviour (no security context), set both to `null`
+(setting them to `{}` keeps the defaults, because Helm merges maps):
+
+```bash
+helm install cert-manager-webhook ./deploy/cert-manager-webhook \
+  --namespace cert-manager \
+  --set podSecurityContext=null \
+  --set securityContext=null
 ```
 
-With a read-only root filesystem, also mount an `emptyDir` at `/tmp`.
+The chart's default image is now the public `ghcr.io/sotoon/cert-manager-webhook`
+with the chart's `appVersion` (`v1.7.3`).
+
+Until `v1.3.22` is published to GHCR, install it from this repository:
+
+```bash
+helm install cert-manager-webhook ./deploy/cert-manager-webhook --namespace cert-manager
+```
 
 ### Sotoon internal registry
 
